@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "esp_log.h"
 #include "esp_heap_trace.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
@@ -11,14 +12,15 @@
 
 #include "lora.h"
 
+#define TAG "BKGLoRa"
 static xQueueHandle evt_queue = NULL;
 TimerHandle_t timer;
 
 void task_tx(void *p,int txlen)
 {
-      //vTaskDelay(pdMS_TO_TICKS(5000));
-      printf("Send packet...\n");
+      ESP_LOGI(TAG,"Send packet...");
       lora_send_packet((uint8_t *)p,txlen);
+      ESP_LOGI(TAG,"Sent.");
 }
 
 int do_rx(char *p,int maxlen)
@@ -28,7 +30,7 @@ int do_rx(char *p,int maxlen)
    if(lora_received()) {
     x = lora_receive_packet((uint8_t *)p, maxlen-1);
     p[x] = 0;
-    printf("Received: %s\n", p);
+    ESP_LOGI(TAG,"Received: %s", p);
     return (x);
    }
    return(0);
@@ -37,14 +39,14 @@ int do_rx(char *p,int maxlen)
 #define EVENT_LORA_RX 0
 #define EVENT_TIMER 1
 static void IRAM_ATTR lora_isr_handler(void* arg) {
-    printf("LoRa ISR\r\n");
+    ESP_LOGI(TAG,"LoRa ISR\r");
 
     uint32_t item = EVENT_LORA_RX;
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
 
 void LoRaTimer(TimerHandle_t xTimer) {
-     printf("LoRa Timer\r\n");
+     ESP_LOGI(TAG,"LoRa Timer 0x%d\r",(uint32_t) xTimer);
     uint32_t item = EVENT_TIMER;
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
@@ -53,9 +55,10 @@ static void main_task(void* arg)
 {
     char rxbuf[32];
     uint32_t evtNo;
+    ESP_LOGI(TAG,"Main Task Started");
     for(;;) {
         if(xQueueReceive(evt_queue, &evtNo, portMAX_DELAY)) {
-		printf("Got Event Number %d\n",evtNo);
+		ESP_LOGI(TAG,"Got Event Number %d",evtNo);
 		switch (evtNo) {
 			case EVENT_LORA_RX:
 				do_rx(rxbuf,sizeof(rxbuf));
@@ -73,7 +76,7 @@ void app_main()
 {
    evt_queue = xQueueCreate(10, sizeof(uint32_t));
 
-   gpio_install_isr_service(0);
+   gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
    // Set Button handler 
    gpio_config_t io_conf;
    io_conf.intr_type = GPIO_PIN_INTR_NEGEDGE;
@@ -83,17 +86,24 @@ void app_main()
    gpio_config(&io_conf);
    gpio_isr_handler_add(CONFIG_IRQ_GPIO, lora_isr_handler, (void*) 0);
 
-
-   printf("LoRa Init...\n");
+   ESP_LOGI(TAG,"LoRa Init...");
    lora_init();
-   printf("LoRa SetFreq...\n");
-   lora_set_frequency(433e6);
-   lora_set_spreading_factor(6);
+   ESP_LOGI(TAG,"LoRa Check...");
+   lora_initialized();
+   ESP_LOGI(TAG,"LoRa SetFreq...");
+   lora_set_frequency(433775000);
+   lora_set_spreading_factor(12);
    lora_set_tx_power(17);
-   lora_set_bandwidth(7.8e3);
-   //printf("LoRa Enable CRC...\n");
+   lora_set_bandwidth(125000);
+   lora_set_coding_rate(8);
+   //ESP_LOGI(TAG,"LoRa Enable CRC...");
    //lora_enable_crc();
-   printf("LoRa Start TX Task...\n");
-   xTaskCreate(&main_task, "task_tx", 2048, NULL, 5, NULL);
-   timer = xTimerCreate("Timer",10000,pdFALSE,(void *) 0,LoRaTimer);
+   ESP_LOGI(TAG,"LoRa Start TX Task...");
+   xTaskCreate(&main_task, "task_tx", 8192, NULL, 5, NULL);
+   ESP_LOGI(TAG,"Main Created...");
+   //task_tx("Testing",7);
+   timer = xTimerCreate("Timer",(10000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
+   ESP_LOGI(TAG,"Timer Created");
+   xTimerStart(timer,0);
+   ESP_LOGI(TAG,"Timer Started");
 }
