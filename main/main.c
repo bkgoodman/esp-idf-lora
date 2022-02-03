@@ -10,7 +10,18 @@
 #include "freertos/timers.h"
 #include "driver/gpio.h"
 
+#include "ssd1306.h"
+#include "font8x8_basic.h"
+
 #include "lora.h"
+
+#if 0
+#define _I2C_NUMBER(num) I2C_NUM_##num
+#define I2C_NUMBER(num) _I2C_NUMBER(num)
+#define OLED_I2C_MASTER_SCL_IO (CONFIG_OLED_I2C_MASTER_SCL)               /*!< gpio number for I2C master clock */
+#define OLED_I2C_MASTER_SDA_IO (CONFIG_OLED_I2C_MASTER_SDA)               /*!< gpio number for I2C master data  */
+#define OLED_I2C_MASTER_NUM (I2C_NUMBER(CONFIG_OLED_I2C_MASTER_PORT_NUM)) /*!< I2C port number for master dev */
+#endif
 
 #define TAG "BKGLoRa"
 static xQueueHandle evt_queue = NULL;
@@ -74,6 +85,31 @@ static void main_task(void* arg)
 
 void app_main()
 {
+	SSD1306_t dev;
+	int center, top, bottom;
+	char lineChar[20];
+	ESP_LOGI(TAG,"OLED SDA %d OLED SCL %d MASTER_NUM %d",CONFIG_OLED_I2C_MASTER_SDA,CONFIG_OLED_I2C_MASTER_SCL,CONFIG_OLED_I2C_MASTER_PORT_NUM);
+	//i2c_master_init(&dev, CONFIG_OLED_I2C_MASTER_SDA, CONFIG_OLED_I2C_MASTER_SCL, -1);
+	i2c_master_init(&dev, 21, 22, -1);
+ 	ESP_LOGI(TAG, "Panel is 128x64");
+	ssd1306_init(&dev, 128, 64);
+	ssd1306_clear_screen(&dev, false);
+	ssd1306_contrast(&dev, 0xff);
+	top = 2;
+	center = 3;
+	bottom = 8;
+	ssd1306_display_text(&dev, 0, "SSD1306 128x64", 14, false);
+	ssd1306_display_text(&dev, 1, "ABCDEFGHIJKLMNOP", 16, false);
+	ssd1306_display_text(&dev, 2, "abcdefghijklmnop",16, false);
+	ssd1306_display_text(&dev, 3, "Hello World!!", 13, false);
+	ssd1306_clear_line(&dev, 4, true);
+	ssd1306_clear_line(&dev, 5, true);
+	ssd1306_clear_line(&dev, 6, true);
+	ssd1306_clear_line(&dev, 7, true);
+	ssd1306_display_text(&dev, 4, "SSD1306 128x64", 14, true);
+	ssd1306_display_text(&dev, 5, "ABCDEFGHIJKLMNOP", 16, true);
+	ssd1306_display_text(&dev, 6, "abcdefghijklmnop",16, true);
+	ssd1306_display_text(&dev, 7, "Hello World!!", 13, true);
    evt_queue = xQueueCreate(10, sizeof(uint32_t));
 
    gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
@@ -101,6 +137,10 @@ void app_main()
    ESP_LOGI(TAG,"LoRa Start TX Task...");
    xTaskCreate(&main_task, "task_tx", 8192, NULL, 5, NULL);
    ESP_LOGI(TAG,"Main Created...");
+  
+
+   //ESP_LOGI(TAG,"OLED SDA %d OLED SCL %d MASTER_NUM %d",OLED_I2C_MASTER_SDA_IO,OLED_I2C_MASTER_SCL_IO,OLED_I2C_MASTER_NUM);
+
    //task_tx("Testing",7);
    timer = xTimerCreate("Timer",(10000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
    ESP_LOGI(TAG,"Timer Created");

@@ -48,4 +48,15 @@ config CALLSIGN
     help
        Call Sign
 
+config OLED_I2C_MASTER_SCL
+	int "OLED I2C Master SCL"
+	default 0
+
+config OLED_I2C_MASTER_SDA
+	int "OLED I2C Master SDA"
+	default 0
+
+config OLED_I2C_MASTER_PORT_NUM
+	int "OLED I2C Master Port Num"
+	default 0
 endmenu
