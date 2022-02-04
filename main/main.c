@@ -30,7 +30,11 @@ TimerHandle_t timer;
 uint8_t mac[6];
 char macstr[18];
 int seq=0;
+SSD1306_t dev;
 
+
+void updateDisplay(char *line);
+void updateSequence();
 
 void task_tx(void *p,int txlen)
 {
@@ -38,6 +42,7 @@ void task_tx(void *p,int txlen)
       lora_send_packet((uint8_t *)p,txlen);
 	lora_receive();    // put into receive mode
       ESP_LOGI(TAG,"Sent.");
+      updateSequence();
 }
 
 int do_rx(char *p,int maxlen)
@@ -48,6 +53,7 @@ int do_rx(char *p,int maxlen)
     x = lora_receive_packet((uint8_t *)p, maxlen-1);
     p[x] = 0;
     ESP_LOGI(TAG,"Received: %s", p);
+    updateDisplay(p);
    lora_receive();    // put into receive mode
     return (x);
    }
@@ -113,11 +119,32 @@ static void main_task(void* arg)
     }
 }
 
+void updateSequence() {
+	char lineChar[32];
+	ssd1306_clear_line(&dev, 2, true);
+	snprintf(lineChar,sizeof(lineChar),"Sequence: %d",seq);
+	ssd1306_display_text(&dev, 2, lineChar, strlen(lineChar), true);
+}
+
+void updateDisplay(char *r) {
+	int i;
+
+	for (i=0;(i<4) && (strlen(r));i++) {
+		ssd1306_display_text(&dev, i+4, r, strlen(r)>16? 16:strlen(r), false);
+		r+=16;
+	}
+
+}
+
 void app_main()
 {
-	SSD1306_t dev;
-	int center, top, bottom;
-	char lineChar[20];
+	char lineChar[32];
+
+   esp_read_mac(&mac,ESP_MAC_ETH);
+   snprintf(macstr,sizeof(macstr),"%2.2x:%2.2x:%2.2x:%2.2x:%2.2x:%2.2x",
+		   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+   ESP_LOGI(TAG,"Mac: %s",macstr);
+
 	ESP_LOGI(TAG,"OLED SDA %d OLED SCL %d MASTER_NUM %d",CONFIG_OLED_I2C_MASTER_SDA,CONFIG_OLED_I2C_MASTER_SCL,CONFIG_OLED_I2C_MASTER_PORT_NUM);
 	//i2c_master_init(&dev, CONFIG_OLED_I2C_MASTER_SDA, CONFIG_OLED_I2C_MASTER_SCL, -1);
 	i2c_master_init(&dev, 21, 22, -1);
@@ -125,9 +152,14 @@ void app_main()
 	ssd1306_init(&dev, 128, 64);
 	ssd1306_clear_screen(&dev, false);
 	ssd1306_contrast(&dev, 0xff);
-	top = 2;
-	center = 3;
-	bottom = 8;
+	ssd1306_clear_line(&dev, 0, true);
+	ssd1306_clear_line(&dev, 1, true);
+	ssd1306_clear_line(&dev, 2, true);
+	ssd1306_display_text(&dev, 0, CONFIG_CALLSIGN, strlen(CONFIG_CALLSIGN), true);
+	ssd1306_display_text(&dev, 1, &macstr[3], strlen(macstr)-3, true);
+	snprintf(lineChar,sizeof(lineChar),"Sequence: %d",seq);
+	ssd1306_display_text(&dev, 2, lineChar, strlen(lineChar), true);
+	/*
 	ssd1306_display_text(&dev, 0, "SSD1306 128x64", 14, false);
 	ssd1306_display_text(&dev, 1, "ABCDEFGHIJKLMNOP", 16, false);
 	ssd1306_display_text(&dev, 2, "abcdefghijklmnop",16, false);
@@ -140,12 +172,9 @@ void app_main()
 	ssd1306_display_text(&dev, 5, "ABCDEFGHIJKLMNOP", 16, true);
 	ssd1306_display_text(&dev, 6, "abcdefghijklmnop",16, true);
 	ssd1306_display_text(&dev, 7, "Hello World!!", 13, true);
+	*/
    evt_queue = xQueueCreate(10, sizeof(uint32_t));
 
-   esp_read_mac(&mac,ESP_MAC_ETH);
-   snprintf(macstr,sizeof(macstr),"%2.2x:%2.2x:%2.2x:%2.2x:%2.2x:%2.2x",
-		   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-   ESP_LOGI(TAG,"Mac: %s",macstr);
    gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
    // Set Button handler 
    gpio_config_t io_conf;
