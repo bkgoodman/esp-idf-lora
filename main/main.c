@@ -51,8 +51,6 @@ int do_rx(char *p,int maxlen)
 #define EVENT_LORA_RX 0
 #define EVENT_TIMER 1
 static void IRAM_ATTR lora_isr_handler(void* arg) {
-    ESP_LOGI(TAG,"LoRa ISR\r");
-
     uint32_t item = EVENT_LORA_RX;
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
@@ -63,7 +61,7 @@ void LoRaTimer(TimerHandle_t xTimer) {
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
 
-unsigned char buf[1];
+unsigned char buf[55];
 void task_rx(void *p)
 {
    int x;
@@ -72,7 +70,7 @@ void task_rx(void *p)
       while(lora_received()) {
 	      printf("RCVd...\n");
          x = lora_receive_packet(buf, sizeof(buf));
-	      printf("Got %d\n",x);
+	 ESP_LOGW(TAG,"Post-Receive");
          buf[x] = 0;
          printf("Received: %s\n", buf);
          lora_receive();
@@ -139,7 +137,7 @@ void app_main()
    gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
    // Set Button handler 
    gpio_config_t io_conf;
-   io_conf.intr_type = GPIO_PIN_INTR_NEGEDGE;
+   io_conf.intr_type = GPIO_PIN_INTR_POSEDGE;
    io_conf.pin_bit_mask = (1<< CONFIG_IRQ_GPIO);
    io_conf.mode = GPIO_MODE_INPUT;
    io_conf.pull_up_en = 1;
