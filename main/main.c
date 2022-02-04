@@ -31,6 +31,7 @@ void task_tx(void *p,int txlen)
 {
       ESP_LOGI(TAG,"Send packet...");
       lora_send_packet((uint8_t *)p,txlen);
+	lora_receive();    // put into receive mode
       ESP_LOGI(TAG,"Sent.");
 }
 
@@ -62,6 +63,26 @@ void LoRaTimer(TimerHandle_t xTimer) {
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
 
+unsigned char buf[1];
+void task_rx(void *p)
+{
+   int x;
+   for(;;) {
+      lora_receive();    // put into receive mode
+      while(lora_received()) {
+	      printf("RCVd...\n");
+         x = lora_receive_packet(buf, sizeof(buf));
+	      printf("Got %d\n",x);
+         buf[x] = 0;
+         printf("Received: %s\n", buf);
+         lora_receive();
+      vTaskDelay(100 / portTICK_PERIOD_MS);
+      }
+      vTaskDelay(100 / portTICK_PERIOD_MS);
+   }
+}
+
+
 static void main_task(void* arg)
 {
     char rxbuf[32];
@@ -75,6 +96,9 @@ static void main_task(void* arg)
 				do_rx(rxbuf,sizeof(rxbuf));
 				break;
 			case EVENT_TIMER:
+   ESP_LOGI(TAG,"Start Rx");
+				do_rx(rxbuf,sizeof(rxbuf));
+	   ESP_LOGI(TAG,"Ended Received");
 				snprintf(rxbuf,sizeof(rxbuf),"%s is on the air",CONFIG_CALLSIGN);
 				task_tx(rxbuf,strlen(rxbuf));
 				break;
@@ -122,8 +146,9 @@ void app_main()
    gpio_config(&io_conf);
    gpio_isr_handler_add(CONFIG_IRQ_GPIO, lora_isr_handler, (void*) 0);
 
-   ESP_LOGI(TAG,"LoRa Init...");
-   lora_init();
+   int err = lora_init();
+   ESP_LOGI(TAG,"LoRa Init: %d",err);
+
    ESP_LOGI(TAG,"LoRa Check...");
    lora_initialized();
    ESP_LOGI(TAG,"LoRa SetFreq...");
@@ -135,15 +160,18 @@ void app_main()
    //ESP_LOGI(TAG,"LoRa Enable CRC...");
    //lora_enable_crc();
    ESP_LOGI(TAG,"LoRa Start TX Task...");
-   xTaskCreate(&main_task, "task_tx", 8192, NULL, 5, NULL);
-   ESP_LOGI(TAG,"Main Created...");
+   //xTaskCreate(&main_task, "task_tx", 8192, NULL, 5, NULL);
+   //ESP_LOGI(TAG,"Main Created...");
+   xTaskCreate(&task_rx, "rx_tx", 8192, NULL, 5, NULL);
+   ESP_LOGI(TAG,"Rx Running...");
   
 
    //ESP_LOGI(TAG,"OLED SDA %d OLED SCL %d MASTER_NUM %d",OLED_I2C_MASTER_SDA_IO,OLED_I2C_MASTER_SCL_IO,OLED_I2C_MASTER_NUM);
 
    //task_tx("Testing",7);
-   timer = xTimerCreate("Timer",(10000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
-   ESP_LOGI(TAG,"Timer Created");
-   xTimerStart(timer,0);
-   ESP_LOGI(TAG,"Timer Started");
+   //timer = xTimerCreate("Timer",(10000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
+   //ESP_LOGI(TAG,"Timer Created");
+   //xTimerStart(timer,0);
+   //ESP_LOGI(TAG,"Timer Started");
+
 }
