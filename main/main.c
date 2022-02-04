@@ -9,6 +9,7 @@
 #include "freertos/queue.h"
 #include "freertos/timers.h"
 #include "driver/gpio.h"
+#include "esp_system.h"
 
 #include "ssd1306.h"
 #include "font8x8_basic.h"
@@ -26,6 +27,10 @@
 #define TAG "BKGLoRa"
 static xQueueHandle evt_queue = NULL;
 TimerHandle_t timer;
+uint8_t mac[6];
+char macstr[18];
+int seq=0;
+
 
 void task_tx(void *p,int txlen)
 {
@@ -43,6 +48,7 @@ int do_rx(char *p,int maxlen)
     x = lora_receive_packet((uint8_t *)p, maxlen-1);
     p[x] = 0;
     ESP_LOGI(TAG,"Received: %s", p);
+   lora_receive();    // put into receive mode
     return (x);
    }
    return(0);
@@ -83,8 +89,9 @@ void task_rx(void *p)
 
 static void main_task(void* arg)
 {
-    char rxbuf[32];
+    char rxbuf[64];
     uint32_t evtNo;
+    lora_receive();    // put into receive mode
     ESP_LOGI(TAG,"Main Task Started");
     for(;;) {
         if(xQueueReceive(evt_queue, &evtNo, portMAX_DELAY)) {
@@ -94,11 +101,12 @@ static void main_task(void* arg)
 				do_rx(rxbuf,sizeof(rxbuf));
 				break;
 			case EVENT_TIMER:
-   ESP_LOGI(TAG,"Start Rx");
+   //ESP_LOGI(TAG,"Start Rx");
 				do_rx(rxbuf,sizeof(rxbuf));
-	   ESP_LOGI(TAG,"Ended Received");
-				snprintf(rxbuf,sizeof(rxbuf),"%s is on the air",CONFIG_CALLSIGN);
+	   //ESP_LOGI(TAG,"Ended Received");
+				snprintf(rxbuf,sizeof(rxbuf),"%s %s %d is on the air",CONFIG_CALLSIGN,macstr,seq++);
 				task_tx(rxbuf,strlen(rxbuf));
+	ESP_LOGI(TAG,"Transmitted: %s",rxbuf);
 				break;
 		}
 	}
@@ -134,6 +142,10 @@ void app_main()
 	ssd1306_display_text(&dev, 7, "Hello World!!", 13, true);
    evt_queue = xQueueCreate(10, sizeof(uint32_t));
 
+   esp_read_mac(&mac,ESP_MAC_ETH);
+   snprintf(macstr,sizeof(macstr),"%2.2x:%2.2x:%2.2x:%2.2x:%2.2x:%2.2x",
+		   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+   ESP_LOGI(TAG,"Mac: %s",macstr);
    gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
    // Set Button handler 
    gpio_config_t io_conf;
@@ -158,18 +170,18 @@ void app_main()
    //ESP_LOGI(TAG,"LoRa Enable CRC...");
    //lora_enable_crc();
    ESP_LOGI(TAG,"LoRa Start TX Task...");
-   //xTaskCreate(&main_task, "task_tx", 8192, NULL, 5, NULL);
-   //ESP_LOGI(TAG,"Main Created...");
-   xTaskCreate(&task_rx, "rx_tx", 8192, NULL, 5, NULL);
-   ESP_LOGI(TAG,"Rx Running...");
+   xTaskCreate(&main_task, "main_task", 8192, NULL, 5, NULL);
+   ESP_LOGI(TAG,"Main Created...");
+   //xTaskCreate(&task_rx, "rx_tx", 8192, NULL, 5, NULL);
+   //ESP_LOGI(TAG,"Rx Running...");
   
 
    //ESP_LOGI(TAG,"OLED SDA %d OLED SCL %d MASTER_NUM %d",OLED_I2C_MASTER_SDA_IO,OLED_I2C_MASTER_SCL_IO,OLED_I2C_MASTER_NUM);
 
    //task_tx("Testing",7);
-   //timer = xTimerCreate("Timer",(10000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
-   //ESP_LOGI(TAG,"Timer Created");
-   //xTimerStart(timer,0);
-   //ESP_LOGI(TAG,"Timer Started");
+   timer = xTimerCreate("Timer",(10000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
+   ESP_LOGI(TAG,"Timer Created");
+   xTimerStart(timer,0);
+   ESP_LOGI(TAG,"Timer Started");
 
 }
