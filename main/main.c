@@ -128,6 +128,10 @@ void updateSequence() {
 
 void updateDisplay(char *r) {
 	int i;
+	char dispstr[20];
+
+	snprintf(dispstr,sizeof(dispstr),"RSSI:%d SNR:%3.3f",lora_packet_rssi(),lora_packet_snr());
+	ssd1306_display_text(&dev, 3, dispstr, strlen(dispstr)>16? 16:strlen(r), false);
 
 	for (i=0;(i<4) && (strlen(r));i++) {
 		ssd1306_display_text(&dev, i+4, r, strlen(r)>16? 16:strlen(r), false);
