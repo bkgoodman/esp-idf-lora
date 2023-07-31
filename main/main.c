@@ -24,12 +24,18 @@
 #define OLED_I2C_MASTER_NUM (I2C_NUMBER(CONFIG_OLED_I2C_MASTER_PORT_NUM)) /*!< I2C port number for master dev */
 #endif
 
+#define GPIO_PIN_34 GPIO_NUM_34
+#define GPIO_PIN_35 GPIO_NUM_35
+#define GPIO_PIN_14 GPIO_NUM_14
+
 #define TAG "BKGLoRa"
 static xQueueHandle evt_queue = NULL;
 TimerHandle_t timer;
 uint8_t mac[6];
 char macstr[18];
 int seq=0;
+unsigned short pump1=0;
+unsigned short pump2=0;
 SSD1306_t dev;
 
 
@@ -67,6 +73,10 @@ static void IRAM_ATTR lora_isr_handler(void* arg) {
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
 
+static void IRAM_ATTR gpio_isr_handler(void* arg) {
+    uint32_t item = (uint32_t) arg;
+    xQueueSendFromISR(evt_queue, &item, NULL);
+}
 void LoRaTimer(TimerHandle_t xTimer) {
      ESP_LOGI(TAG,"LoRa Timer 0x%d\r",(uint32_t) xTimer);
     uint32_t item = EVENT_TIMER;
@@ -107,13 +117,22 @@ static void main_task(void* arg)
 				do_rx(rxbuf,sizeof(rxbuf));
 				break;
 			case EVENT_TIMER:
-   //ESP_LOGI(TAG,"Start Rx");
-				do_rx(rxbuf,sizeof(rxbuf));
-	   //ESP_LOGI(TAG,"Ended Received");
-				snprintf(rxbuf,sizeof(rxbuf),"%s %s %d is on the air",CONFIG_CALLSIGN,macstr,seq++);
+				do_rx(rxbuf,sizeof(rxbuf)); // Why??? 
+				//snprintf(rxbuf,sizeof(rxbuf),"%s %s %d is on the air",CONFIG_CALLSIGN,macstr,seq++);
+				snprintf(rxbuf,sizeof(rxbuf),"%s GOT %d %d %d EOT",CONFIG_CALLSIGN,seq++,pump1,pump2);
 				task_tx(rxbuf,strlen(rxbuf));
 	ESP_LOGI(TAG,"Transmitted: %s",rxbuf);
 				break;
+      case GPIO_NUM_34:
+        pump1++;
+        updateSequence();
+        break;
+      case GPIO_NUM_35:
+        pump2++;
+        updateSequence();
+        break;
+      default:
+	      ESP_LOGI(TAG,"Unhandled event %d",evtNo);
 		}
 	}
     }
@@ -122,7 +141,7 @@ static void main_task(void* arg)
 void updateSequence() {
 	char lineChar[32];
 	ssd1306_clear_line(&dev, 2, true);
-	snprintf(lineChar,sizeof(lineChar),"Sequence: %d",seq);
+	snprintf(lineChar,sizeof(lineChar),"%d %d %d",seq,pump1,pump2);
 	ssd1306_display_text(&dev, 2, lineChar, strlen(lineChar), true);
 }
 
@@ -180,6 +199,7 @@ void app_main()
    evt_queue = xQueueCreate(10, sizeof(uint32_t));
 
    gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
+
    // Set Button handler 
    gpio_config_t io_conf;
    io_conf.intr_type = GPIO_PIN_INTR_POSEDGE;
@@ -188,6 +208,29 @@ void app_main()
    io_conf.pull_up_en = 1;
    gpio_config(&io_conf);
    gpio_isr_handler_add(CONFIG_IRQ_GPIO, lora_isr_handler, (void*) 0);
+
+  // Setup input receivers
+    io_conf.intr_type = GPIO_INTR_NEGEDGE; // Interrupt on positive edge
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+
+    io_conf.pin_bit_mask = (1ULL << GPIO_PIN_34);
+    gpio_config(&io_conf);
+
+    io_conf.pin_bit_mask = (1ULL << GPIO_PIN_35);
+    gpio_config(&io_conf);
+
+    io_conf.pin_bit_mask = (1ULL << GPIO_PIN_14);
+    gpio_config(&io_conf);
+
+    // Install the GPIO ISR service
+    // gpio_install_isr_service(0);
+
+    // Hook the ISR handler to both GPIO pins
+    gpio_isr_handler_add(GPIO_PIN_35, gpio_isr_handler, (void*)GPIO_PIN_35);
+    gpio_isr_handler_add(GPIO_PIN_14, gpio_isr_handler, (void*)GPIO_PIN_14);
+    gpio_isr_handler_add(GPIO_PIN_34, gpio_isr_handler, (void*)GPIO_PIN_34);
 
    int err = lora_init();
    ESP_LOGI(TAG,"LoRa Init: %d",err);
