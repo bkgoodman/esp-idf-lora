@@ -1,30 +1,48 @@
 menu "LoRa Configuration"
 
+config TRANSMIT_SECONDS
+	int "Transmission interval (Seconds)"
+	default 10
+
+config SENSOR_PIN_1
+    int "Sensor 1 Input GPIO"
+    range 0 35
+    default 0
+    help
+	Pin Number to monitor and report. 0 if Not used
+
+config SENSOR_PIN_2
+    int "Sensor 2 Input GPIO"
+    range 0 35
+    default 0
+    help
+	Pin Number to monitor and report. 0 if Not used
+
 config CS_GPIO
     int "CS GPIO"
     range 0 35
-    default 15
+    default 18
     help
 	Pin Number where the NCS pin of the LoRa module is connected to.
 
 config RST_GPIO
     int "RST GPIO"
     range 0 35
-    default 32
+    default 14
     help
 	Pin Number where the NRST pin of the LoRa module is connected to.
 
 config MISO_GPIO
     int "MISO GPIO"
     range 0 35
-    default 13
+    default 19
     help
 	Pin Number to be used as the MISO SPI signal.
 
 config MOSI_GPIO
     int "MOSI GPIO"
     range 0 35
-    default 12
+    default 27
     help
 	Pin Number to be used as the MOSI SPI signal.
 
@@ -38,7 +56,7 @@ config IRQ_GPIO
 config SCK_GPIO
     int "SCK GPIO"
     range 0 35
-    default 14
+    default 5
     help
 	Pin Number to be used as the SCK SPI signal.
 
@@ -50,13 +68,13 @@ config CALLSIGN
 
 config OLED_I2C_MASTER_SCL
 	int "OLED I2C Master SCL"
-	default 0
+	default 21
 
 config OLED_I2C_MASTER_SDA
 	int "OLED I2C Master SDA"
-	default 0
+	default 22
 
 config OLED_I2C_MASTER_PORT_NUM
 	int "OLED I2C Master Port Num"
-	default 0
+	default 1
 endmenu

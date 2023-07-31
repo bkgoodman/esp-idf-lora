@@ -4,7 +4,7 @@
 #include "freertos/task.h"
 
 #include "esp_log.h"
-#include "esp_heap_trace.h"
+//#include "esp_heap_trace.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
 #include "freertos/timers.h"
@@ -12,7 +12,7 @@
 #include "esp_system.h"
 
 #include "ssd1306.h"
-#include "font8x8_basic.h"
+//#include "font8x8_basic.h"
 
 #include "lora.h"
 
@@ -24,9 +24,6 @@
 #define OLED_I2C_MASTER_NUM (I2C_NUMBER(CONFIG_OLED_I2C_MASTER_PORT_NUM)) /*!< I2C port number for master dev */
 #endif
 
-#define GPIO_PIN_34 GPIO_NUM_34
-#define GPIO_PIN_35 GPIO_NUM_35
-#define GPIO_PIN_14 GPIO_NUM_14
 
 #define TAG "BKGLoRa"
 static xQueueHandle evt_queue = NULL;
@@ -68,13 +65,19 @@ int do_rx(char *p,int maxlen)
 
 #define EVENT_LORA_RX 0
 #define EVENT_TIMER 1
+#define EVENT_SENSOR_1 2
+#define EVENT_SENSOR_2  3
+#define EVENT_UNKNOWN  99
+
 static void IRAM_ATTR lora_isr_handler(void* arg) {
     uint32_t item = EVENT_LORA_RX;
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
 
 static void IRAM_ATTR gpio_isr_handler(void* arg) {
-    uint32_t item = (uint32_t) arg;
+    uint32_t item=EVENT_UNKNOWN;
+    if ((CONFIG_SENSOR_PIN_1) && (arg == (void *) CONFIG_SENSOR_PIN_1)) item=EVENT_SENSOR_1;
+    if ((CONFIG_SENSOR_PIN_2) && (arg == (void *) CONFIG_SENSOR_PIN_2)) item=EVENT_SENSOR_2;
     xQueueSendFromISR(evt_queue, &item, NULL);
 }
 void LoRaTimer(TimerHandle_t xTimer) {
@@ -111,30 +114,31 @@ static void main_task(void* arg)
     ESP_LOGI(TAG,"Main Task Started");
     for(;;) {
         if(xQueueReceive(evt_queue, &evtNo, portMAX_DELAY)) {
-		ESP_LOGI(TAG,"Got Event Number %d",evtNo);
-		switch (evtNo) {
-			case EVENT_LORA_RX:
-				do_rx(rxbuf,sizeof(rxbuf));
-				break;
-			case EVENT_TIMER:
-				do_rx(rxbuf,sizeof(rxbuf)); // Why??? 
-				//snprintf(rxbuf,sizeof(rxbuf),"%s %s %d is on the air",CONFIG_CALLSIGN,macstr,seq++);
-				snprintf(rxbuf,sizeof(rxbuf),"%s GOT %d %d %d EOT",CONFIG_CALLSIGN,seq++,pump1,pump2);
-				task_tx(rxbuf,strlen(rxbuf));
-	ESP_LOGI(TAG,"Transmitted: %s",rxbuf);
-				break;
-      case GPIO_NUM_34:
-        pump1++;
-        updateSequence();
-        break;
-      case GPIO_NUM_35:
-        pump2++;
-        updateSequence();
-        break;
-      default:
-	      ESP_LOGI(TAG,"Unhandled event %d",evtNo);
-		}
-	}
+        ESP_LOGI(TAG,"Got Event Number %d",evtNo);
+        switch (evtNo) {
+          case EVENT_LORA_RX:
+            do_rx(rxbuf,sizeof(rxbuf));
+            break;
+          case EVENT_TIMER:
+            do_rx(rxbuf,sizeof(rxbuf)); // Why??? 
+            //snprintf(rxbuf,sizeof(rxbuf),"%s %s %d is on the air",CONFIG_CALLSIGN,macstr,seq++);
+            snprintf(rxbuf,sizeof(rxbuf),"%s GOT %d %d %d EOT",CONFIG_CALLSIGN,seq++,pump1,pump2);
+            task_tx(rxbuf,strlen(rxbuf));
+            ESP_LOGI(TAG,"Transmitted: %s",rxbuf);
+            break;
+          case EVENT_SENSOR_1:
+            pump1++;
+            updateSequence();
+            break;
+          case EVENT_SENSOR_2:
+            pump2++;
+            updateSequence();
+            break;
+          default:
+            ESP_LOGE(TAG,"Unkown Event: %d",evtNo);
+        }
+
+      }
     }
 }
 
@@ -163,7 +167,7 @@ void app_main()
 {
 	char lineChar[32];
 
-   esp_read_mac(&mac,ESP_MAC_ETH);
+   esp_read_mac((uint8_t *) &mac,ESP_MAC_ETH);
    snprintf(macstr,sizeof(macstr),"%2.2x:%2.2x:%2.2x:%2.2x:%2.2x:%2.2x",
 		   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
    ESP_LOGI(TAG,"Mac: %s",macstr);
@@ -215,23 +219,21 @@ void app_main()
     io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
     io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
 
-    io_conf.pin_bit_mask = (1ULL << GPIO_PIN_34);
-    gpio_config(&io_conf);
+    io_conf.pin_bit_mask = (1ULL << CONFIG_SENSOR_PIN_1);
+    if (CONFIG_SENSOR_PIN_1) gpio_config(&io_conf);
 
-    io_conf.pin_bit_mask = (1ULL << GPIO_PIN_35);
-    gpio_config(&io_conf);
-
-    io_conf.pin_bit_mask = (1ULL << GPIO_PIN_14);
-    gpio_config(&io_conf);
+    io_conf.pin_bit_mask = (1ULL << CONFIG_SENSOR_PIN_2);
+    if (CONFIG_SENSOR_PIN_2) gpio_config(&io_conf);
 
     // Install the GPIO ISR service
     // gpio_install_isr_service(0);
 
     // Hook the ISR handler to both GPIO pins
-    gpio_isr_handler_add(GPIO_PIN_35, gpio_isr_handler, (void*)GPIO_PIN_35);
-    gpio_isr_handler_add(GPIO_PIN_14, gpio_isr_handler, (void*)GPIO_PIN_14);
-    gpio_isr_handler_add(GPIO_PIN_34, gpio_isr_handler, (void*)GPIO_PIN_34);
-
+    if (CONFIG_SENSOR_PIN_1) gpio_isr_handler_add(CONFIG_SENSOR_PIN_1, gpio_isr_handler, (void*) CONFIG_SENSOR_PIN_1);
+    if (CONFIG_SENSOR_PIN_2) gpio_isr_handler_add(CONFIG_SENSOR_PIN_2, gpio_isr_handler, (void*) CONFIG_SENSOR_PIN_2);
+  
+   if (CONFIG_SENSOR_PIN_1) ESP_LOGI(TAG,"Sensor 1 on GPIO %d",CONFIG_SENSOR_PIN_1);
+   if (CONFIG_SENSOR_PIN_2) ESP_LOGI(TAG,"Sensor 2 on GPIO %d",CONFIG_SENSOR_PIN_2);
    int err = lora_init();
    ESP_LOGI(TAG,"LoRa Init: %d",err);
 
@@ -255,7 +257,7 @@ void app_main()
    //ESP_LOGI(TAG,"OLED SDA %d OLED SCL %d MASTER_NUM %d",OLED_I2C_MASTER_SDA_IO,OLED_I2C_MASTER_SCL_IO,OLED_I2C_MASTER_NUM);
 
    //task_tx("Testing",7);
-   timer = xTimerCreate("Timer",(10000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
+   timer = xTimerCreate("Timer",(CONFIG_TRANSMIT_SECONDS*1000 / portTICK_PERIOD_MS ),pdTRUE,(void *) 0,LoRaTimer);
    ESP_LOGI(TAG,"Timer Created");
    xTimerStart(timer,0);
    ESP_LOGI(TAG,"Timer Started");
