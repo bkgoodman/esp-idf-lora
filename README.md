@@ -10,7 +10,13 @@ It does basic packet send and receives
 
 In the display above, the white section is the data being transmitted, and the black is the data being recieved. In this example, I have another board about a mile way. Notice that it said on the "adr", where it should say on the "air". This was a reception error. There is no checksuming, so it will display raw data received, even if there is an error.
 
-Newer versions of this project use pins 33 and 34 to transmit input data to the remote. PLEASE NOTE that it also will do this for Pin 24, but pin 24 appears to be some sort of undocumented input which gets triggered during LoRa operations, so it should NOT be used.
+Newer versions of this project use pins 33 and 34 to transmit input data to the remote. 
+![image](https://github.com/bkgoodman/esp-idf-lora/assets/473399/4306c887-06e2-47d7-858e-8b6114ebf2c2)
+
+
+# LoRa Board
+![image](https://github.com/bkgoodman/esp-idf-lora/assets/473399/4a2b0de5-a9b2-4cde-bebb-293fd4531687)
+
 # Settings for Lilygo TTGO V2.0 board
 
 ```
