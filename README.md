@@ -8,7 +8,8 @@ It does basic packet send and receives
 
 ![image](https://user-images.githubusercontent.com/473399/152606080-4939fc39-d760-4324-9357-24fb104d1400.png)
 
-# Settings for Lilygo board
+In the display above, the white section is the data being transmitted, and the black is the data being recieved. In this example, I have another board about a mile way. Notice that it said on the "adr", where it should say on the "air". This was a reception error. There is no checksuming, so it will display raw data received, even if there is an error.
+# Settings for Lilygo TTGO V2.0 board
 
 ```
 CONFIG_CS_GPIO=18
