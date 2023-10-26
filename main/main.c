@@ -48,6 +48,9 @@ void task_tx(void *p,int txlen)
       updateSequence();
 }
 
+// K1BKG 00:11:22:33:44:55:66 Message<CS>
+// 0         1         2        3
+// 0123456789-123456789-12345679-1234
 int do_rx(char *p,int maxlen)
 {
    int x;
@@ -58,6 +61,11 @@ int do_rx(char *p,int maxlen)
     ESP_LOGI(TAG,"Received: %s", p);
     updateDisplay(p);
    lora_receive();    // put into receive mode
+    if ((x >= 31) && !strncmp(p,"K1BKG ",6) && (!strncmp(&p[27],"ZERO!",5))) {
+      seq=0;
+      pump1=0;
+      pump2=0;
+    }
     return (x);
    }
    return(0);
@@ -112,11 +120,30 @@ void task_rx(void *p)
    }
 }
 
+#define CRC16_POLY 0x1021
 
+uint16_t crc16(const uint8_t *data, int length) {
+    uint16_t crc = 0xFFFF;
+
+    for (int i = 0; i < length; i++) {
+        crc ^= data[i] << 8;
+
+        for (int j = 0; j < 8; j++) {
+            if (crc & 0x8000) {
+                crc = (crc << 1) ^ CRC16_POLY;
+            } else {
+                crc <<= 1;
+            }
+        }
+    }
+
+    return crc;
+}
 static void main_task(void* arg)
 {
-    char rxbuf[64];
+    char rxbuf[128];
     uint32_t evtNo;
+    short l;
     lora_receive();    // put into receive mode
     ESP_LOGI(TAG,"Main Task Started");
     for(;;) {
@@ -129,7 +156,9 @@ static void main_task(void* arg)
           case EVENT_TIMER:
             do_rx(rxbuf,sizeof(rxbuf)); // Why??? 
             //snprintf(rxbuf,sizeof(rxbuf),"%s %s %d is on the air",CONFIG_CALLSIGN,macstr,seq++);
-            snprintf(rxbuf,sizeof(rxbuf),"%s GOT %d %d %d EOT",CONFIG_CALLSIGN,seq++,pump1,pump2);
+            //snprintf(rxbuf,sizeof(rxbuf),"%s GOT %d %d %d EOT",CONFIG_CALLSIGN,seq++,pump1,pump2);
+            l = snprintf(rxbuf,sizeof(rxbuf),"%s GOT %2.2x %2.2x %2.2x EOT ",CONFIG_CALLSIGN,seq++,pump1,pump2);
+            snprintf(&rxbuf[l],sizeof(rxbuf)-l,"%4.4x",crc16((const uint8_t *)rxbuf,l));
             task_tx(rxbuf,strlen(rxbuf));
             ESP_LOGI(TAG,"Transmitted: %s",rxbuf);
             break;
