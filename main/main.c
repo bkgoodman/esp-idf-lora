@@ -68,6 +68,7 @@ int do_rx(char *p,int maxlen)
 #define EVENT_SENSOR_1 2
 #define EVENT_SENSOR_2  3
 #define EVENT_UNKNOWN  99
+uint64_t sensor_debounce[2] = {0,0};
 
 static void IRAM_ATTR lora_isr_handler(void* arg) {
     uint32_t item = EVENT_LORA_RX;
@@ -78,7 +79,13 @@ static void IRAM_ATTR gpio_isr_handler(void* arg) {
     uint32_t item=EVENT_UNKNOWN;
     if ((CONFIG_SENSOR_PIN_1) && (arg == (void *) CONFIG_SENSOR_PIN_1)) item=EVENT_SENSOR_1;
     if ((CONFIG_SENSOR_PIN_2) && (arg == (void *) CONFIG_SENSOR_PIN_2)) item=EVENT_SENSOR_2;
-    xQueueSendFromISR(evt_queue, &item, NULL);
+
+    uint64_t now = esp_timer_get_time();
+    if ((item != EVENT_UNKNOWN) && (now > sensor_debounce[item - EVENT_SENSOR_1])) {
+
+      sensor_debounce[item - EVENT_SENSOR_1] = now + 1000000;
+      xQueueSendFromISR(evt_queue, &item, NULL);
+    }
 }
 void LoRaTimer(TimerHandle_t xTimer) {
      ESP_LOGI(TAG,"LoRa Timer 0x%d\r",(uint32_t) xTimer);
